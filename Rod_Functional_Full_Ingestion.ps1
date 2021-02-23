@@ -533,11 +533,69 @@ function componentsIngestion($rootFolderName, [System.Management.Automation.PSCr
             {
                 #$a = "Microsoft Visual C++ Runtime x64 2010 Update 1".replace("+", "plus")
                 $installer_application = $parentFolder.replace("+", "plus")
+            }
+            else
+            {
+                #For other software components without a vendor pattern, just feed the normal $parentFolder name as the installer_application name.
+                $installer_application = $parentFolder
+            }
+            #throw "'${parentFolder}' lacks a vendor Pattern."
+            #break
+        }
+        #Replace the spaces in $installer_application with underscores so it is to convention for ingestion.
+        $installer_application = $installer_application.replace(" ", "_")
+        Write-Host "Past regex" 
+        Write-Host $installer_application
+        $parsedParentFolderPathNoVersion = $rootFolderName + "\" + $installer_application
+        $currSoftCompFulldir = $softCompDir.FullName
+        Write-Host $parsedParentFolderPathNoVersion 
+        Write-Host "Hook 4.5"
+
+        #If we got a success code from our test connection function. 
+        if($canbeConnected)
+        {
+            try{
+                Write-Host "Hook 4.6" 
+                Write-Host $deliveryCategoryFolderName
+                $vendor = ""
+                $vendor = $vendor_alias[$deliveryCategoryFolderName] #Bank of America -> bank_of america. To the conventions of how we ingest the Bank of America components into NEXUS.
+
+                Write-Host $vendor
+
+                #[string] $zipval = $softCompDir.FullName #This is the full path of th e parent directory of the current msi file. Value: C:\Users\zk787uq\Desktop\Ingestion_Testing\10.0.0_McAfee\McAfee ENS 10.6.1
+                [string] $zipVal = $parsedParentFolderPathnoVersion
+
+                Write-Host $zipVal
+
+                #We have zipVal, now we just need version to use our zip function.
+                #We set a default version of '10.10.10', we get the version using regex on the software component directory's name.
+
+                $installer_version = "10.10"
+
+                if (!$noVersionFlagger){ 
+                    if ($installer_application -eq "Bank_of_America_.Net_DLL"){
+                        $installer_version = "3.0.1.0"
+                    } elseif ($installer_application -eq "Bank_of_America_Enable_TLSv1.2_Only") {
+                        $installer_version = "1.0"
+                    } else {
+                        $installer_version = ($parentFolder -split '(\d*\.\d*.*)')[1] # ("McAfee ENS 10.6.1" -split 'l\d+T. \d*.*)')[1] = 10.6.1
+                    }
                 }
-                else
-                {
-                    #For other software components without a vendor pattern, just feed the
 
+                <#I decided against using the get-msi-version function on the msi I would find as this wouldnt be to standard if it didnt match the version in the name and therefore we shouldnt be running it with this code.
+                #Then, we get an array of just the msi files inside of the current software component directory in the iteration.
+                #If the array is not empty (-lt 1), then there is at least one msi file:
+                #We get the first msi file in the array's, version using our get-msi-version function. We will account for the case when we need to get other versions as well later.
+                
+                
+                
+                
+                
+                
+                
+                
+                #>
 
+                
 
 
