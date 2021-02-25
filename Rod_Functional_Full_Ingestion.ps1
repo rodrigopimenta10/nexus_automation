@@ -864,12 +864,128 @@ if ($verbose_logging)
     run_log_print -log_message "Logging Set to Debug." -log_level DEBUG
 }
 
-                
-                
-                
-                
-                
-
-                
+run_log_print -log_message "Uploading to= https://ah-1005376-001.sdi.corp.bankofamerica.com:8082/nexus" -log_level DEBUG
 
 
+
+#####################################################
+# cd C:\Users\zk787uq\Desktop 
+# ./Rod_Functional_Full_Ingestion.psl -deliveryFolderPath 'C:\Users\zk787uq\Desktop\Ingestion_Testing' -verbose_logging
+
+#Given: $deliveryFolderPath as parameter.
+
+#Get rootFolderName for parameter 
+#We have the capability to iterate through all of the deliveries inside of $deliveryFolderPath (E:\VendorDropbox) 
+#In this case, the delivery folder path is 'C:\Users\zk787uq\Desktop\Ingestion_Testing'
+
+$sourcepathArr = Get-ChildItem -Path $deliveryFolderPath 
+# (System.Array) of (System.IO.FileSystemInfo) objects of all of the deliveries inside of $deliveryFolderPath (E:\VendorDropbox)
+
+#Case 1: No deliveries inside delivery directory. 
+if($sourcepathArr.Length -lt 1){
+    $sourcePathArrLength = $sourcepathArr.Length
+    run_log_print -log_message "Informational=$sourcePathArrLength of Delivery folders in $deliveryFolderPath folder. Nothing to Ingest." -log_level "INFO" -return_code "0"
+    exit 0
+}
+#Case 2: Iterate through all delivery categories (Avecto, bank of america, Greyware, IBM, Microsoft, Splunk) in sorted deliveries array 
+$sourcepathArr = $sourcepathArr | sort 
+$visitOne = $false 
+foreach($sourcepathVal in $sourcepathArr) { #Iterating through all of the delivery categories in the sorted array $sourcepathArr. 
+    if($visitOne -eq $true) {
+        Write-Output ""
+    }
+    else{
+        $visitOne = $true
+    }
+    #$deliveryName = Split-Path $sourcepathVal -Leaf
+    $rootFolderName = ""
+    $rootFolderName = ([System.IO.DirectoryInfo] $sourcepathval).FullName #We explicitly cast the (System.IO.FileSystemInfo) current delivery directory in the iteration to a ([System.IO.DirectoryInfo]) object.
+    #Then the '.FullName' method makes the object into a string object, $rootFolderName is now a string object.
+    #rootFolderName is the entire path of the current delivery category directory we are iterating through.
+    #C:\Users\zk787uq\Desktop\Ingest\Avecto
+
+
+    #Case 2.1: If the Current Delivery Directory name in the iteration is null or an empty string, error. 
+    if($rootFolderName -eq $null -or $rootFolderName.Length -le 0){
+        Write-Output "[Error] Source Path is not provided for Component Ingestion."
+    }
+    #Case 2.2: If the current delivery directory is not a type 'Container', error. 
+    elseif ( -Not (Test-Path $rootFolderName -PathType Container)){
+        Write-Output "`r`n[Error] Source Path is not a directory location. : $sourcepath"
+    }
+    #Case 2.3: If the current delivery directory does not fall in one of the two edge cases above.
+    else
+    {
+        #We create an array with all the items (software component directories) inside of the current delivery category directory in the iteration.
+        $componentSourceArr = @() 
+        $componentSourceArr = Get-ChildItem -Path $rootFolderName
+
+
+        Write-Host "Hook 1" #We get the current environment's username and password. 
+        $credentials = $null
+        
+        #$User = $eny:CRED USERNAME 
+        #$pSWord = $env:CRED_PASSWORD | ConvertTo-SecureString -AsPlainText -Force
+
+        $User = "abcde"
+        $pSWord = "abcde" | ConvertTo-SecureString -AsPlaintext -Force
+
+        Write-Host "Hook 2"
+
+        #Case 2.3.2: If (the current environment's username is not null and is not an empty string), and (the current environment's password is not null and is not an empty string).
+        if($User -ne $null -and ($User.Trim().Length -gt 0) -and $pSWord -ne $null -and ($pSWord.ToString().Trim().Length -gt 0)) {
+            # We create a new object which has the username and password in its arguments list.
+            $credentials = New-Object -TypeName "System.Management.Automation.PSCredential" -ArgumentList $user, $pSWord
+        }
+
+        Write-Host "Hook 3"
+
+        #Case 2.3.3: If the credentials object is null, or the username field of the object is an empty string, or the password field of the object is null, error.
+        if($credentials -eq $null -or $credentials.UserName.Length -le 0 -or $credentials.Password -eq $null){
+            Write-Output "[Error] User Credentials are not provided. $($credentials.UserName)"
+            Exit 1
+        }
+        Write-Host "Hook 4"
+
+        #Run 'componentsIngestion' function with the current delivery directory in the iteration, and the object with the current environment's username and password.
+        #Store the return value of the 'componentsIngestion' function inside the $allComponentsIngestedAndReported variable.
+        #The $componentSourceArr has the software component directories inside of the current delivery category directory.
+        $allComponentsIngestedAndReported = componentsIngestion $rootFolderName $credentials $componentSourceArr #rootFolderName is the full path of the current delivery category directory we are iterating through. $credentials is the object with the current system's username and password.
+        
+        Write-host "Hook 5, out of 'componentsIngestion' function."
+
+        #Case 2.3.4: If the 'componentsIngestion' returned a $true value. 
+        if($allComponentsIngestedAndReported -eq $true)
+        {
+            Write-Host "Ingestion function returned true."
+        }
+        #Case 2.3.5: If the 'componentsIngestion' returned a $false value. 
+        else{
+            Write-Host "Ingestion function returned false." 
+            #exit 1
+        }
+    }
+}
+#We now delete all of the leftover zips from our '$leftOverZipsToRemove' array 
+foreach($zipPath in $leftOverZipsToRemove)
+{
+    if(Test-Path -Path $zipPath) {
+        Remove-Item $zipPath -Force
+    }
+}
+######################################################
+
+run_log_print -log_message "Script Completed" -log_level INFO 
+if ($verbose_logging)
+{
+    write-output "######## Runtime Alerts ##########" 
+    foreach ($key in $runtime_alerts.keys)
+    {
+        Write-Output "$key $computer_name $application_user $( $runtime_alerts[$key][0] ) $( $runtime_alerts[$key][1] )"
+    }
+
+}
+
+
+#Exit with success code as if you reached this, the 'componentsIngestion' function returned $true for all delivery category directories, and therefore it was a successful run. 
+exit 0
