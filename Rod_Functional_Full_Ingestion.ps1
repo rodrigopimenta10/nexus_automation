@@ -554,7 +554,8 @@ function componentsIngestion($rootFolderName, [System.Management.Automation.PSCr
         #If we got a success code from our test connection function. 
         if($canbeConnected)
         {
-            try{
+            try
+            {
                 Write-Host "Hook 4.6" 
                 Write-Host $deliveryCategoryFolderName
                 $vendor = ""
@@ -586,15 +587,288 @@ function componentsIngestion($rootFolderName, [System.Management.Automation.PSCr
                 #Then, we get an array of just the msi files inside of the current software component directory in the iteration.
                 #If the array is not empty (-lt 1), then there is at least one msi file:
                 #We get the first msi file in the array's, version using our get-msi-version function. We will account for the case when we need to get other versions as well later.
-                
-                
-                
-                
-                
-                
-                
-                
+
+                $msifilesArr = @().
+                $msiFilesArr = Get-ChildItem -Path $parentFolder -Filter *.msi
+
+                if ($msifilesArr.Length -lt 1) {
+                    #We have no msi files in this software component directory to check the version of.
+                    #$msiFilesArrLength = $msiFilesArr.Length
+                    #run_log_print -log_message "Informational=$msiFilesArrLength of Delivery folders in $parentFolder folder. Nothing to Ingest." -log_level "INFO" -return_code "0"
+                    #exit 0 
+                } else {
+                    #We have msi files to check the version of. We just check the version of the first msi file in this software component directory.
+                    #We will add functionality later to account for cases where we have more than one msi file in the software component directory, 
+                    # although that would not be to standards.
+
+                    $msi File = $msiFilesArr[0] 
+                    $fullMsiFilePath = $softCompDir.FullName + $msiFile 
+                    $msiVersion = Get-MsiDatabaseVersion $fullMsifilePath
+                }
                 #>
+
+                ###################################################################
+                #
+                # This is the the first function in the 'componentsIngestion' function.
+                # It takes the full path of the parent directory of the current msi file (minus the '\' at the end of the name of the path), 
+                # and $finalVer which is an empty variable.
+                # The 'zipcomponent' function returns the path value of the zipped component.
+                #
+                ###################################################################
+              
+                $finalver = $installer_version
+                Write-Host "'finalVer' version name parameter used for the zip function is: $finalVer"
+                Write-Host "Right before zipComponent call"
+                $zipLocation = zipComponent $currSoftCompFullDir $zipVal $finalVer #C:\Users\zk787uq\Desktop\Ingestion_Testing\10.0.0_McAfee\McAfee ENS 10.6.1
+                #$zipLocation = C:\Users\zk787uq\Desktop\Ingestion_Testing\10.0.0_DBD_20181018_0\DBD_OPT_ODY_SNMPFW-10.0.0.zip
+                
+                $leftOverZipsToRemove += $zipLocation
+                
+                <# 
+                if ($zipLocation -and (Test-Path -Path $zipLocation)) {
+                    Remove-Item $zipLocation -Force
+                }
+                if (Test-Path -Path $zipLocation) {
+                    Remove-Item $zipLocation -Force
+                }
+                #>
+
+                Write-Host "Hook 4.7"
+                
+                $parsedParentFolderPathNoVersion = Split-Path $parsedParentFolderPathNoVersion -Leaf
+                #We get the MD5 hash of the zipped component we just zipped. 
+                $localhash = (get-filehash $zipLocation -Algorithm MD5).hash 
+                $localhashShal = (get-filehash $zipLocation -Algorithm SHA1).hash
+
+                Write-Host "The local MD5 hash of the zipped component is: $localhash" 
+                Write-Host "The local SHA1 hash of the zipped component is: $localhash Sha1"
+
+                Write-Host "Hook 4.8"
+                
+                #We initialize some variables. 
+                $group = "com/" + $vendor + "/atm"
+
+                $artifact = $parsedParentFolderPathNoVersion 
+                $version = $finalVer
+
+                $temp1 = "Group: " + $group 
+                $temp2 = "Artifact: " + $artifact 
+                $temp3 = "Version: " + $version 
+                Write-Host $temp1 
+                Write-Host $temp2 
+                Write-Host $temp3 
+                Write-Host "Hook 4.9"
+
+                $artifactMD5File = $parsedParentFolderPathNoVersion+ "-" + $finalVer + ".zip" + ".md5"
+                $artifactSHA1File = $parsedParentFolderPathNoVersion+ "-" + $finalVer + ".zip" + ".sha1"
+                $finalUrl = "$downloadUrl/$group/$artifact/$version/$artifactMD5File"
+                $finalUrlSha = "$downloadUrl/$group/$artifact/$version/$artifactSHA1File"
+                
+                $temp1 = "Local zip file: " + $artifactMD5File 
+                $temp2 = "Final URL for md5 Check: " + $finalUrl
+                Write-Host $temp1 
+                Write-Host "Local zip file MD5 hash: $localhash"
+                Write-Host $temp2 
+                Write-Host "Final URL for SHA1 Check: $finalUrlSha" 
+                Write-Host "Hook 4.10"
+                
+                #run_log_print -log_message "Uploading to=$finalUrl" -log_level DEBUG
+                
+                $failedWebRequestFlag = $false
+                
+                try{
+                    $md5RetrievedHashVal = Invoke-WebRequest -Uri $finalUrl -usebasicparsing
+                
+                    $temp1 = "Retrieved MD5 hash from NEXUS: " + $md5RetrievedHashVal
+                    Write-Host $temp1 
+                }catch{
+                    Write-Host "Failure at Invoke-WebRequest"
+                }
+                try{
+                    $shalRetrievedHashVal = Invoke-WebRequest -Uri $finalUrlSha -usebasicparsing
+                    $temp1 = "Retrieved SHA1 hash from NEXUS: " + $shalRetrievedHashVal
+                    Write-Host $temp1 
+                } catch {
+                    $failedWebRequestFlag = $true 
+                    Write-Host "Failure at Invoke-WebRequest"
+                }
+
+                Write-Host "Flagger"
+                #Case 2: If (the webRequest was successful), (the sha1 hash value of the same component we just zipped, in NEXUS, is not null), (the status code of the HTTP request was 200), and (the sha1 hash value retrieved is not an empty string).
+                if($failedWebRequestFlag -eq $false -and $shalRetrievedHashVal -ne $null -and $shalRetrievedHashVal.StatusCode -eq 200 -and $shalRetrievedHashVal.ToString().Trim() -ne "")
+                {
+                    Write-Host "We do not ingest this component as we retrieved a sha1 hash and therefore this component is already up in NEXUS."
+                    #Case 2.1: If (the sha1 hash of the file we just zipped locally is null), or (the sha1 hash of the locally zipped file is an empty string), or (the locally zipped file's sha1 hash is not equal to the same corresponding zipped component from NEXUS's hash).
+                    if($localhashSha1 -eq $null -or $localhashShal.Trim() -eq "" -or $localhashSha1 -ne $sha1RetrievedHashVal.ToString().Trim()) {
+                        #local hash from local zip component and md5hash from nexus component named the same, have different hash.
+                        Write-Host "$parentFolder : Component present in delivery has same version number but different SHA1 hash signature to that present in Nexus Repository."
+                        #We do not upload this component to NEXUS, since it is already present in NEXUS, and we save it in the componentsNotUploaded variable to keep track of this local component which has different MD5 hash value from the same zipped component in NEXUS.
+                        #If they the local software component has the same hash as the corresponding remote software component in NEXUS, then we don't need to flag it and put it in our $componentsNotUploaded array as we already have it in NEXUS.
+
+                        $componentsNotUploaded += "$artifact-$version.zip : Component present in delivery has same version number but different SHA1 hash signature to that present in Nexus Repository."
+                        #$errOccFlag = $true
+
+                        #Continue, go to the next iteration in the foreach loop, going to the next msi file in the dictionary we are iterating through.
+                        Write-Host "Hook Before Continue"
+                        continue
+                    }
+                    if($localhashSha1 -eq $sha1RetrievedHashVal.ToString().Trim()) {
+                        Write-Host "$parentFolder : Component present in delivery has same version number and same SHA1 hash signature to that present in Nexus Repository."
+                        $componentsNotUploaded += "$artifact-$version.zip : Component present in delivery has same version number and same SHA1 hash signature to that present in Nexus Repository."
+                    }
+                    Write-Host "Hook before continue" 
+                    continue
+                }
+                <# We switched this block from using MD5 to using SHA1.
+                #Case 2: If (the md5 hash value of the same component we just zipped, in NEXUS, is not null), (the status code of the HTTP request was 200), and (the md5 ha sh value retrieved is not an empty string).
+                if($md5 RetrievedHashVal -ne $null -and $md5RetrievedHashVal.StatusCode -eq 200 -and $md5RetrievedHashVal.ToString().Trim() -ne "")
+                {
+                    Write-Host "We do not ingest this component as we retrieved an MD5 hash and therefore this component is already up in NEXUS."
+                    #Case 2.1: If (the hash of the file we just zipped locally is null), or (the hash of the locally zipped file is an empty string), or (the locally zipped file's hash is not equal to the same corresponding zipped component from NEXUS's hash)
+                    if ($localhash -eq $null -or $localhash.Trim() -eq "" -or $localhash -ne $md5RetrievedHashval.ToString().Trim()) 
+                    {
+                        #local hash from local zip component and md5hash from nexus component named the same, have different hash.
+                        Write-Host "$parentFolder : Component present in delivery has same version number but different MD5 hash signature to that present in Nexus Repository."
+                        
+                        #We do not upload this component to NEXUS, since it is already present in NEXUS, and we save it in the $componentsNotUploaded variable to keep track of this local component which has different MD5 hash value from the same zipped component in NEXUS.
+                        #If the local software component has the same hash as the corresponding remote software component in NEXUS, then we don't need to flag it and put it in our $componentsNotUploaded array as we already have it in NEXUS.
+                
+                        $componentsNotUploaded += "$artifact-$version.zip : Component present in delivery has same version number but different hash signature to that present in Nexus Repository."
+                        #$errOccFlag = $true
+                
+                        #Continue, go to the next iteration in the foreach loop, going to the next msi file in the dictionary we are iterating through.
+                        Write-Host "Hook Before Continue" 
+                        continue
+                    }
+                }
+                #> 
+
+                #Case 3: If the locally zipped component (doesnt have a corresponding component in NEXUS) - the retrieved value is therefore $null or an empty string. 
+                #If there is nothing inside of the finalURL (NEXUS upload URL for this current component in the current delivery), the Invoke-WebRequest doesn't retrieve an MD5 hash from this URL, then we can upload the zipped software component to this $finalURL in NEXUS. 
+
+                else 
+                { 
+                    #Redefine $group variable. 
+                    $group = "com." + $vendor + ".atm" #Before we used '/' as separators in order to get the $finalURL = ($downloadURL + the correct data fields). 
+
+                    #####################################################
+                    #
+                    # The 'ingestComp_XML' is the function which does the actual POST request and ingestion. We pass 6 variables. 
+                    # 
+                    #####################################################
+                
+                    Write-Host "Hook 4.11" 
+
+                    ingestComp_XML $uploadURL $group $artifact $version $zipLocation $credentials
+                 
+                    Write-Host "Hook 4.12" 
+                
+                    #We add this current component to the componentsUploaded ArrayList, but we never really checked if it was successfully uploaded. 
+                    $componentsUploaded += "$artifact-$version.zip" 
+
+                    Write-Host "Hook 4.13"
+                }
+            }
+            #Two catches of the try block above (after the 'if($canbeConnected)')
+            catch [System.Net.WebException] 
+            {
+                [int] $errCode = ([System.Net.HttpWebResponse]$_.Exception.Response).statusCode 
+                if($errCode -eq 404)
+                { 
+                    #If the HTTP response is 404, or 'page not found', let's try the upload again. 
+                    $group = "com." + $vendor + ".atm" 
+                    try{ 
+                        ingestComp_XML $uploadURL $group $artifact $version $ziplocation $credentials $componentsUploaded $componentsNotUploaded 
+                    }
+                    catch{ 
+                        $componentsNotUploaded += "$artifact-$version.zip ; Exception while Component ingestion $_" 
+                        $errOccFlag = true 
+                        break
+                    } 
+                    finally{ 
+                        <#
+                        if($zipLocation -and (Test-Path -Path $zipLocation)) { 
+                            Remove-Item $zipLocation -Force
+                        } 
+                        #> 
+                    } 
+                    $componentsUploaded += "$artifact-$version.zip" 
+                    $reportingSuccess = singleComponentReporting $artifact $version $rootFolderName $tsvFilePath $tsvPreExisting 
+                    if($reportingSuccess -eq $false) { 
+                        $errOccFlag = $true 
+                        break
+                    }
+                }
+                else{ 
+                    $componentsNotUploaded += "$artifact-$version.zip : Exception while Component ingestion $_"
+                    $errOccFlag = $true
+                    break
+                }
+            }
+            catch{
+                $componentsNotUploaded += "$artifact-$version.zip : Exception while component ingestion $_"
+                $errOccFlag = $true 
+                break
+            }
+            <#
+            finally{
+                Write-Host "Hook 4.Finally" 
+                #We always do the finally. 
+                if($zipLocation -and (Test-Path -Path $zipLocation)) {
+                    Remove-Item $zipLocation -Force
+                }
+            }
+            #>
+        }
+        Write-Host "Hook End of software component foreach loop iteration after catches"
+
+    } #END of loop iterating through all of the software component directories inside of the current category directory.
+
+    Write-Host "Hook 4.14"
+
+    #Case 4: If the $componentsUploaded arrayList is not null and has at least one element or more. Print out the components in the arrayList. 
+    if ($componentsUploaded.Length -gt 0){
+        Write-Host "'r'n" 
+        Write-Host "List of Uploaded Components" 
+        foreach($compU in $componentsUploaded) {
+            Write-Host $compu
+        }
+    }
+    else{
+        Write-Host "'r'n" 
+        Write-Host "List of Uploaded Components"
+        Write-Host "There were no Components to upload (Might already be present in the nexus repository)"
+    }
+    #Case 5: If the $componentsNotUploaded is not null and has at least one element or more. Print out the components in the arrayList. 
+    if($componentsNotUploaded.Length -gt 0){
+        Write-Host "'r'n" 
+        Write-Host "List of components not Uploaded (Component Name : Error Occurred)" 
+        foreach ($compNU in $componentsNotUploaded) {
+            Write-Host $compNU
+        }
+    }
+    #Case 6: If we ever set the $errOcc flag variable to $true (at least one of the msi files we tried to upload was unsuccessful), return false for failure. Else return $true for success. 
+    if($errOccFlag -eq $true) {
+        return $false
+    }
+    return $true
+}
+
+#####################################################
+#
+# Main Driver for Script
+#
+#####################################################
+if ($verbose_logging)
+{
+    run_log_print -log_message "Logging Set to Debug." -log_level DEBUG
+}
+
+                
+                
+                
+                
+                
 
                 
 
