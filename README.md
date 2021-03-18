@@ -1,5 +1,5 @@
 # Nexus_Automation
-This code makes ingestion and retrieval from NEXUS automatic with POST com object.
+This code makes ingestion and retrieval from NEXUS automatic with custom POST com object.
 Created powershell and python scripts from scratch due to many issues with legacy code that was also very unclear and hard to read.
 
 The scripts I creaded from scratch:
