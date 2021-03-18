@@ -1,2 +1,18 @@
 # Nexus_Automation
-This is code which makes ingestion and retrieval from NEXUS automatic.
+This is code makes ingestion and retrieval from NEXUS automatic.
+Created powershell and python scripts from scratch due to many issues with legacy code that was also very unclear and hard to read.
+
+The scripts I creaded from scratch:
+Checked if the software components from vendors were updated and delivered appropriately. Checked formatting of XML files, extracted information from XML files and compared to the information extracted from the headers of the MSI binary files. Sometimes the name of the software component MSI file and the version header in the MSI file info were both updated appropriately, but the MD5 and SHA1 hash did not change from the previous delivery, indicating that there was no update to the source code.
+
+Created automated system with PowerShell, Python, and Jenkins, that ran every first minute of every work day hour and uploaded new software components into our binary source control system, on our NEXUS repository, automatically. Jenkins job triggered email notification to the team upon an exit code of 1, indicating an error.
+
+Cached all the software component artifacts in appropriately designed cache space on the server we connected(RDP) into (the production supporting build server) to run the automated system.
+
+Parsed the data from the install XML files and used it to retrieve the appropriate software component, from the NEXUS repository, into our deployment task sequence that is used on Microsoft Deployment Toolkit. If the component is already in our deployment share’s task sequence, then it doesn’t extract from NEXUS. If the component is already in our cache on the build server, then extract component from cache and not NEXUS.
+
+Initiated and led adoption of new CI/CD tool, Jenkins, in the organization that had a multi-million-dollar impact on Bank of America. Took initiative in proposing and explaining how downloading Jenkins, which is free, on our build server would incredibly improve efficiency for our team. Then explained how having Jenkins available as an internal tool you may download would be incredibly useful for all the tech teams in the company. The company executives agreed and put Jenkins in the company’s internal system so any team can download. They also made Jenkins a standard for the entire Bank of America for the use as a CI/CD development tool. Jenkins became very popular among the entire organization. My team downloaded Jenkins on our working servers, and substantially improved the efficiency of the automated system I created with PowerShell and Python. I created Jenkins jobs for all the code bases. Jenkins jobs pulled code bases from appropriate SVN or Bitbucket repos, created crontab jobs for code execution on the first minute of every workday hour, utilized email notification to alert for errors, ran on appropriate AD groups and appropriately targeted servers.
+
+Used JIRA to keep track of tasks in the agile system. We had daily scrum stand ups at 9am every morning. Each task in JIRA was assigned a number of points, each point correlating to one day of work. All tasks I was assigned was connected to the URL of a Bitbucket or SVN repository on our build server. When we used Bitbucket as our remote source control system, git was used as our local source control system. SVN has the combined capability of local and remote source control. 
+
+Supervisor: Jamin Shanti, 804-356-7414
