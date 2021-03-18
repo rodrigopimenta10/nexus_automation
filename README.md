@@ -5,7 +5,7 @@ Created powershell and python scripts from scratch due to many issues with legac
 The scripts I creaded from scratch:
 Checked if the software components from vendors were updated and delivered appropriately. Checked formatting of XML files, extracted information from XML files and compared to the information extracted from the headers of the MSI binary files. Sometimes the name of the software component MSI file and the version header in the MSI file info were both updated appropriately, but the MD5 and SHA1 hash did not change from the previous delivery, indicating that there was no update to the source code.
 
-Created automated system with PowerShell, Python, and Jenkins, that ran every first minute of every work day hour and uploaded new software components into our binary source control system, on our NEXUS repository, automatically. Jenkins job triggered email notification to the team upon an exit code of 1, indicating an error.
+Created automated system with PowerShell, Python, and Jenkins, that ran every first minute of every work day hour and uploaded new software components into our binary source control system, our NEXUS repository, automatically. Jenkins job triggered email notification to the team upon an exit code of 1, indicating an error.
 
 Cached all the software component artifacts in appropriately designed cache space on the server we connected(RDP) into (the production supporting build server) to run the automated system.
 
